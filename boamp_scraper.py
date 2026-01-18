@@ -479,18 +479,45 @@ class BOAMPScraper:
             'dataset': 'boamp',
             'timezone': 'Europe/Paris',
             'lang': 'fr',
-            'sort': '-dateparution' # Force descending sort (newest first)
+            'sort': '-dateparution' # Force descending sort
         }
         
+        q_parts = []
+        
         for k, v in params.items():
-            # Handle standard ODS params
-            if k.startswith('refine.') or k.startswith('disjunctive.') or k == 'q':
-                # Pass the full list 'v' to allow multiple values (e.g. multiple departements)
-                api_params[k] = v
+            # Handle standard q
+            if k == 'q':
+                val = v[0] if isinstance(v, list) else v
+                q_parts.append(f"({val})")
+            
             # Handle BOAMP special date range
             elif k.startswith('q.timerange.'):
-                # BOAMP sends 'dateparution:[2024...]' as value
-                api_params['q'] = v[0]
+                val = v[0] if isinstance(v, list) else v
+                q_parts.append(f"({val})")
+            
+            # Handle Refines (filters)
+            elif k.startswith('refine.') or k.startswith('disjunctive.'):
+                # Extract field name (e.g. 'refine.type_avis' -> 'type_avis')
+                # Attention: parfois 'disjunctive.type_marche' -> on veut filtrer sur 'type_marche'
+                field_name = k.split('.')[-1]
+                
+                # Transform disjunctive/refine lists into OR queries
+                if isinstance(v, list) and len(v) > 1:
+                    # Construct (field:"val1" OR field:"val2")
+                    # ODS syntax: field:("val1" OR "val2")
+                    or_vals = " OR ".join([f'"{val}"' for val in v])
+                    q_parts.append(f"{field_name}:({or_vals})")
+                else:
+                    # Single value -> Keep as standard param
+                    # Use refine.FIELD for strict filtering if single
+                    # But convert disjunctive.FIELD to refine.FIELD for API consistency if needed?
+                    # ODS usually ignores 'disjunctive.' prefix, it expects 'refine.' or 'q'
+                    # So let's force use 'refine.' key for single values
+                    final_key = f"refine.{field_name}"
+                    api_params[final_key] = v
+        
+        if q_parts:
+            api_params['q'] = " AND ".join(q_parts)
         
         # Force descending sort no matter what user/URL says
         api_params['sort'] = '-dateparution'
