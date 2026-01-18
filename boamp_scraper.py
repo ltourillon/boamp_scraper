@@ -242,15 +242,24 @@ class BOAMPScraper:
                 # Get Tender ID from LotResult
                 # Dans LotResult, c'est juste une référence à l'ID
                 lot_tender_ref = lr.get('efac:LotTender', {})
-                tender_id = lot_tender_ref.get('cbc:ID', {}).get('#text')
+                # Parfois c'est une liste si plusieurs tenders (bizarre pour un LotResult unique mais sait-on jamais)
+                if isinstance(lot_tender_ref, list) and lot_tender_ref:
+                    lot_tender_ref = lot_tender_ref[0]
                 
+                tender_id = lot_tender_ref.get('cbc:ID', {}).get('#text') if isinstance(lot_tender_ref, dict) else None
+                
+                if not tender_id: continue
+
                 # Find Tendering Party for this Tender ID using the all_tenders_list
                 target_tpa_id = None
                 for tender in all_tenders_list:
-                    tid = tender.get('cbc:ID', {}).get('#text')
+                    tid_node = tender.get('cbc:ID', {})
+                    tid = tid_node.get('#text') if isinstance(tid_node, dict) else tid_node
+                    
                     if tid == tender_id:
                         # Ici efac:TenderingParty est un dict avec cbc:ID
-                        target_tpa_id = tender.get('efac:TenderingParty', {}).get('cbc:ID', {}).get('#text')
+                        tpa_node = tender.get('efac:TenderingParty', {}).get('cbc:ID', {})
+                        target_tpa_id = tpa_node.get('#text') if isinstance(tpa_node, dict) else tpa_node
                         break
                 
                 if target_tpa_id and target_tpa_id in tpa_map:
