@@ -530,52 +530,78 @@ class BOAMPScraper:
         print(f"🌍 Recherche Target: {max_results} avis")
         print(f"DEBUG API Params: {api_params}")
         
-        while processed_count < max_results:
-            # Batch size (API limits usually around 100)
-            batch_size = min(100, max_results - processed_count)
-            api_params['rows'] = batch_size
-            api_params['start'] = current_start
+        # Stratégie : On force la recherche année par année (2026, 2025...)
+        # car le tri par date de l'API est souvent défaillant.
+        # Les IDs BOAMP commencent par l'année (ex: 26-12345)
+        target_years = ['26', '25', '24'] 
+        base_q = api_params.get('q', '')
+        
+        for year in target_years:
+            if processed_count >= max_results: break
             
-            try:
-                print(f"📡 Fetching batch: start={current_start}, rows={batch_size}")
-                resp = self.session.get(api_search_url, params=api_params, timeout=15)
-                if resp.status_code != 200:
-                    print(f"❌ Erreur API Recherche: {resp.status_code}")
+            print(f"📅 Analyse de l'année 20{year} (Prefix ID {year}-)...")
+            
+            # Reset pagination pour cette année
+            current_start = 0
+            year_finished = False
+            
+            while not year_finished and processed_count < max_results:
+                # Batch size
+                batch_size = min(100, max_results - processed_count)
+                api_params['rows'] = batch_size
+                api_params['start'] = current_start
+                
+                # Injection du filtre ID Année
+                year_filter = f"idweb:{year}*"
+                if base_q:
+                    # On combine avec les filtres existants (ex: Département + Année)
+                    api_params['q'] = f"({base_q}) AND {year_filter}"
+                else:
+                    api_params['q'] = year_filter
+                
+                try:
+                    # print(f"📡 Fetching batch {year}: start={current_start}")
+                    resp = self.session.get(api_search_url, params=api_params, timeout=15)
+                    if resp.status_code != 200:
+                        print(f"❌ Erreur API Recherche: {resp.status_code}")
+                        year_finished = True
+                        break
+                    
+                    data = resp.json()
+                    records = data.get('records', [])
+                    if not records:
+                        print(f"🏁 Fin des résultats pour 20{year}.")
+                        year_finished = True
+                        break
+                    
+                    # Scrape each result
+                    for i, record in enumerate(records):
+                        if processed_count >= max_results: break
+                        
+                        idweb = record['fields'].get('idweb')
+                        if not idweb: continue
+                        
+                        processed_count += 1
+                        notice_url = f"https://www.boamp.fr/pages/avis/?q=idweb:%22{idweb}%22"
+                        
+                        if progress_callback:
+                            progress_callback(processed_count, max_results, f"Traitement de l'avis {idweb} (20{year})...")
+                        
+                        try:
+                            page_results = self.scrape_page(notice_url, keywords)
+                            if page_results:
+                                for r in page_results:
+                                    r['source_avis_id'] = idweb
+                                all_results.extend(page_results)
+                        except Exception as e:
+                            print(f"⚠️ Erreur sur l'avis {idweb}: {e}")
+                    
+                    current_start += len(records)
+                    
+                except Exception as e:
+                    print(f"⚠️ Erreur Globale Recherche: {e}")
+                    year_finished = True
                     break
-                
-                data = resp.json()
-                records = data.get('records', [])
-                if not records:
-                    print("🏁 Plus de résultats disponibles.")
-                    break
-                
-                # Scrape each result
-                for i, record in enumerate(records):
-                    if processed_count >= max_results: break
-                    
-                    idweb = record['fields'].get('idweb')
-                    if not idweb: continue
-                    
-                    processed_count += 1
-                    notice_url = f"https://www.boamp.fr/pages/avis/?q=idweb:%22{idweb}%22"
-                    
-                    if progress_callback:
-                        progress_callback(processed_count, max_results, f"Traitement de l'avis {idweb}...")
-                    
-                    try:
-                        page_results = self.scrape_page(notice_url, keywords)
-                        if page_results:
-                            for r in page_results:
-                                r['source_avis_id'] = idweb
-                            all_results.extend(page_results)
-                    except Exception as e:
-                        print(f"⚠️ Erreur sur l'avis {idweb}: {e}")
-                
-                current_start += len(records)
-                
-            except Exception as e:
-                print(f"⚠️ Erreur Globale Recherche: {e}")
-                break
             
         return all_results
 
