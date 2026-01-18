@@ -478,12 +478,22 @@ class BOAMPScraper:
         api_params = {
             'dataset': 'boamp',
             'timezone': 'Europe/Paris',
-            'lang': 'fr'
+            'lang': 'fr',
+            'sort': '-dateparution' # Force descending sort (newest first)
         }
         
         for k, v in params.items():
-            if k.startswith('refine.') or k.startswith('disjunctive.') or k == 'q' or k == 'sort':
-                api_params[k] = v[0]
+            # Handle standard ODS params
+            if k.startswith('refine.') or k.startswith('disjunctive.') or k == 'q':
+                # Pass the full list 'v' to allow multiple values (e.g. multiple departements)
+                api_params[k] = v
+            # Handle BOAMP special date range
+            elif k.startswith('q.timerange.'):
+                # BOAMP sends 'dateparution:[2024...]' as value
+                api_params['q'] = v[0]
+        
+        # Force descending sort no matter what user/URL says
+        api_params['sort'] = '-dateparution'
         
         api_search_url = "https://boamp-datadila.opendatasoft.com/api/records/1.0/search/"
         
@@ -491,6 +501,7 @@ class BOAMPScraper:
         current_start = 0
         
         print(f"🌍 Recherche Target: {max_results} avis")
+        print(f"DEBUG API Params: {api_params}")
         
         while processed_count < max_results:
             # Batch size (API limits usually around 100)
