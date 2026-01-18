@@ -101,7 +101,8 @@ with st.sidebar:
     
     keywords_input = st.text_area(
         "Mots-clés (séparés par virgules)",
-        value="plomberie, chauffage, CVC, sanitaire",
+        value="",
+        placeholder="Laisser vide pour tout extraire, ou : plomberie, chauffage...",
         height=100
     )
     
@@ -122,7 +123,8 @@ with st.sidebar:
 
 # Main content
 if launch_btn and url:
-    keywords = [k.strip() for k in keywords_input.split(',')]
+    raw_keywords = keywords_input.split(',')
+    keywords = [k.strip() for k in raw_keywords if k.strip()]
     
     with st.spinner('Extraction en cours... (Analyse de l\'API DILA etc.)'):
         try:

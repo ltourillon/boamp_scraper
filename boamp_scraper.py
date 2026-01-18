@@ -232,10 +232,12 @@ class BOAMPScraper:
                     lot_text = str(lot_info)
                     lot_title = "Lot inconnu"
 
-                matched_keywords = [k for k in keywords if k.lower() in lot_text.lower()]
-                
-                if not matched_keywords:
-                    continue 
+                matched_keywords = []
+                if keywords:
+                    matched_keywords = [k for k in keywords if k.lower() in lot_text.lower()]
+                    
+                    if not matched_keywords:
+                        continue 
 
                 # Get Tender ID from LotResult
                 # Dans LotResult, c'est juste une référence à l'ID
@@ -333,13 +335,15 @@ class BOAMPScraper:
                 content = part
                 
                 # Keyword matching on Lot Title
-                matched_keywords = [k for k in keywords if k.lower() in current_lot_title.lower()]
-                if not matched_keywords: 
-                    # Try content too just in case
-                    matched_keywords = [k for k in keywords if k.lower() in content.lower()]
-                
-                if not matched_keywords:
-                    continue # Not relevant
+                matched_keywords = []
+                if keywords:
+                    matched_keywords = [k for k in keywords if k.lower() in current_lot_title.lower()]
+                    if not matched_keywords: 
+                        # Try content too just in case
+                        matched_keywords = [k for k in keywords if k.lower() in content.lower()]
+                    
+                    if not matched_keywords:
+                        continue # Not relevant
                     
                 # Extraction Entreprise
                 # Pattern attendu: 
