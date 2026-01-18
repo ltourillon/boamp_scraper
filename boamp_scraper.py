@@ -455,7 +455,7 @@ class BOAMPScraper:
         
         return []
 
-    def scrape_search_results(self, search_url, keywords, progress_callback=None):
+    def scrape_search_results(self, search_url, keywords, max_results=50, progress_callback=None):
         """
         Scrape récursivement tous les avis d'une page de recherche BOAMP.
         """
@@ -468,7 +468,7 @@ class BOAMPScraper:
         # Construction API ODS
         api_params = {
             'dataset': 'boamp',
-            'rows': 50, # Max par défaut sur ODS souvent 100
+            'rows': max_results, # Configurable via UI
             'timezone': 'Europe/Paris',
             'lang': 'fr'
         }

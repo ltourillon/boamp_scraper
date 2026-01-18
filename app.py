@@ -105,6 +105,15 @@ with st.sidebar:
         placeholder="Laisser vide pour tout extraire, ou : plomberie, chauffage...",
         height=100
     )
+
+    max_notices = st.number_input(
+        "Nombre max d'avis à analyser",
+        min_value=1,
+        max_value=500,
+        value=50,
+        step=10,
+        help="Nombre maximum d'avis à récupérer depuis la page de recherche."
+    )
     
     st.subheader("Champs à exporter")
     col1, col2 = st.columns(2)
@@ -140,7 +149,7 @@ if launch_btn and url:
                     progress_bar.progress(current / total)
                     status_text.text(f"{msg} ({current}/{total})")
                 
-                results = scraper.scrape_search_results(url, keywords, progress_callback=update_progress)
+                results = scraper.scrape_search_results(url, keywords, max_results=max_notices, progress_callback=update_progress)
                 status_text.text("Extraction terminée !")
                 progress_bar.empty()
                 
