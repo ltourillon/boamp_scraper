@@ -457,7 +457,7 @@ class BOAMPScraper:
 
     def scrape_search_results(self, search_url, keywords, max_results=50, progress_callback=None):
         """
-        Scrape récursivement tous les avis d'une page de recherche BOAMP.
+        Scrape récursivement tous les avis d'une page de recherche BOAMP avec pagination.
         """
         all_results = []
         
@@ -465,54 +465,70 @@ class BOAMPScraper:
         parsed = urlparse(search_url)
         params = parse_qs(parsed.query)
         
-        # Construction API ODS
+        # Base params
         api_params = {
             'dataset': 'boamp',
-            'rows': max_results, # Configurable via UI
             'timezone': 'Europe/Paris',
             'lang': 'fr'
         }
         
-        # Mapping params URL -> API
         for k, v in params.items():
             if k.startswith('refine.') or k.startswith('disjunctive.') or k == 'q' or k == 'sort':
                 api_params[k] = v[0]
         
         api_search_url = "https://boamp-datadila.opendatasoft.com/api/records/1.0/search/"
         
-        print(f"🌍 Recherche via API: {api_search_url} avec params {api_params}")
+        processed_count = 0
+        current_start = 0
         
-        try:
-            resp = self.session.get(api_search_url, params=api_params, timeout=15)
-            if resp.status_code != 200:
-                print(f"❌ Erreur API Recherche: {resp.status_code}")
-                return []
+        print(f"🌍 Recherche Target: {max_results} avis")
+        
+        while processed_count < max_results:
+            # Batch size (API limits usually around 100)
+            batch_size = min(100, max_results - processed_count)
+            api_params['rows'] = batch_size
+            api_params['start'] = current_start
             
-            data = resp.json()
-            records = data.get('records', [])
-            total_hits = data.get('nhits', 0)
-            
-            # Scrape each result
-            for i, record in enumerate(records):
-                idweb = record['fields'].get('idweb')
-                if not idweb: continue
+            try:
+                print(f"📡 Fetching batch: start={current_start}, rows={batch_size}")
+                resp = self.session.get(api_search_url, params=api_params, timeout=15)
+                if resp.status_code != 200:
+                    print(f"❌ Erreur API Recherche: {resp.status_code}")
+                    break
                 
-                notice_url = f"https://www.boamp.fr/pages/avis/?q=idweb:%22{idweb}%22"
+                data = resp.json()
+                records = data.get('records', [])
+                if not records:
+                    print("🏁 Plus de résultats disponibles.")
+                    break
                 
-                if progress_callback:
-                    progress_callback(i + 1, len(records), f"Traitement de l'avis {idweb}...")
-                
-                try:
-                    page_results = self.scrape_page(notice_url, keywords)
-                    if page_results:
-                        for r in page_results:
-                            r['source_avis_id'] = idweb
-                        all_results.extend(page_results)
-                except Exception as e:
-                    print(f"⚠️ Erreur sur l'avis {idweb}: {e}")
+                # Scrape each result
+                for i, record in enumerate(records):
+                    if processed_count >= max_results: break
                     
-        except Exception as e:
-            print(f"⚠️ Erreur Globale Recherche: {e}")
+                    idweb = record['fields'].get('idweb')
+                    if not idweb: continue
+                    
+                    processed_count += 1
+                    notice_url = f"https://www.boamp.fr/pages/avis/?q=idweb:%22{idweb}%22"
+                    
+                    if progress_callback:
+                        progress_callback(processed_count, max_results, f"Traitement de l'avis {idweb}...")
+                    
+                    try:
+                        page_results = self.scrape_page(notice_url, keywords)
+                        if page_results:
+                            for r in page_results:
+                                r['source_avis_id'] = idweb
+                            all_results.extend(page_results)
+                    except Exception as e:
+                        print(f"⚠️ Erreur sur l'avis {idweb}: {e}")
+                
+                current_start += len(records)
+                
+            except Exception as e:
+                print(f"⚠️ Erreur Globale Recherche: {e}")
+                break
             
         return all_results
 
